@@ -1,0 +1,197 @@
+<?php
+
+class myclass 
+{
+  public static $count=0;
+	public static $triesnumber=0;
+	public static $curdir='';
+	public $logfilename;
+	public $logfileindex;
+	public $decodedpath;
+	public $decodedfilename;
+	public $decodedfileindex;
+	public $filename;
+	public $input='';
+	public $strarray;
+	public $str1;
+	public $str2;
+	public $str3;
+	public $tmp1;
+	public $tmp2;
+	public $tmp3;
+	public $tmp4;
+	
+	public function __construct($filetoread = "./export_cms.php", $logtofile  = "./a01.log"){
+		echo "<meta charset=\"UTF-8\"/>";
+		$this->decodedpath = './decoded';
+		if (!dirname($this->decodedpath)){
+			mkdir($this->decodedpath, 0707);
+			echo "Create the dir -->".$this->decodedpath."<br>";
+		}
+
+		//Читаем закодированный файл в переменную 
+ 		$this->filename = $filetoread;		
+		$this->input = file_get_contents($this->filename);
+
+		//Формируем имя файла для вывода результата декодирования
+		$this->decodedfilename = $this->decodedpath . '/' . $this->filename;		
+
+		//Открываем логфайл
+		//$this->logfilename = $logtofile;
+		//$this->logfileindex = fopen($this->logfilename,'w');
+		myclass::$count++; //Увеличиваем счетчик экземпляров класса
+		myclass::$triesnumber++;
+
+		//echo "<br>New instance of myclass is created!<br>";
+	}
+	
+	public function __destruct(){
+		if ($this->logfileindex){
+			//echo "Closing log file<br>";
+			fclose($this->logfileindex);
+		}
+		if ($this->decodedfileindex){
+			//echo "Closing decoded file<br>";
+			fclose($this->decodedfileindex);
+		}
+		//echo "<br>myclass instance is destroyed!<br>";
+		myclass::$count--;
+	}
+	
+	public function replace($pattern, $replacement, $input){
+		$temp = preg_replace($pattern, $replacement, $input);
+		//echo "<p style=\"color:#0000ff\">Replacement procedure is complete</p>";
+		return $temp;
+	}
+	
+	public function exec($input){
+		eval ($input);
+		//echo "<p style=\"color:#00ff00\">Modiffied code evalluation finished!</p>";
+		}
+	
+	public function log($temp){
+		if (!$this->logfileindex){
+			echo "<p style=\"color:#ff0000\">Log file does not openned propertly! Log couldn't be writen!</p>";
+			}
+		else{
+			echo "<p style=\"color:#00ff0f\">Log written to file!</p>";
+			fwrite($this->logfileindex, $temp);
+			}
+	}
+	
+ 	public function savedecoded($temp){
+		echo "<br> decoded file - ".$this->decodedfilename;
+		$this->decodedfileindex = fopen($this->decodedfilename,'w'); 
+		if (!$this->decodedfileindex){
+			echo "<p style=\"color:#ff0000\">Decoded file does not openned propertly! Log couldn't be writen!</p>";
+			}
+		else{
+			echo "<p style=\"color:#00ff00\">Decoded file is written!</p>";
+			fwrite($this->decodedfileindex, $temp);
+			}
+	} 
+	
+	public function amiro_decode(){
+	//echo "<p style=\"color:#ff0000\">amiro_decode functuion is started!</p> ". $this->filename;
+		$begin = strpos($this->input, '$');
+		$finish = strpos($this->input, '?>');
+		$this->input = substr($this->input, $begin, ($finish - $begin));  //Удаляем тег <?php из начала файла
+		$this->tmp1=$this->replace ('/eval/', '\$this->tmp2=', $this->input);
+		$this->exec($this->tmp1);  //выполняем код из tmp1
+		$this->tmp1= $this->replace ('/eval(.*)/', "", $this->input);
+		$this->tmp1= $this->replace ('/__FILE__/', "'".$this->filename."'", $this->tmp1);
+		$this->tmp2= $this->tmp1 . $this->replace ('/eval/', '\$this->tmp3=', $this->tmp2)."return;";
+		$this->exec($this->tmp2); //выполняем код из tmp2
+		$this->tmp3= $this->replace ('/eval/', '\$this->tmp4=', $this->tmp3);
+		$this->tmp3= $this->replace ('/__FILE__/', $this->filename, $this->tmp3); //Особое внимание не нужны кавычки в replacement
+		$this->tmp3= $this->tmp1 . $this->replace ('/\$this->tmp3(.*)/', "", $this->tmp2). $this->tmp3;
+		$this->exec($this->tmp3);
+		return $this->tmp4;
+	}
+
+	public function readbuf($temp, $lenght){
+		$temp = substr($temp, 0, $lenght);
+		$this->str3 = substr($this->str3, $lenght);
+		return $temp;
+	}
+	
+	public function cms_decode(){
+		//echo "<p style=\"color:#ff0000\">CMS decode functuion is started!</p> ". $this->filename;	
+		$this->strarray = file($this->filename);
+		$this->str1 = $this->strarray[0];
+		$this->str2 = $this->strarray[1];
+		$this->str3 = $this->strarray[2];
+		
+		$this->tmp1 = $this->replace ('/eval/', '\$this->tmp2=', $this->str2);
+		$this->tmp1 = $this->replace ('/__FILE__/', "'".$this->filename."'", $this->tmp1);	
+		$this->exec($this->tmp1);  //выполняем код из tmp1
+		$this->tmp2 = $this->replace ('/fread(.*)(\w,)/', '$this->readbuf($this->str3,', $this->tmp2);
+		$this->tmp1 = $this->replace ('/\$this->tmp2=(.*)/', '', $this->tmp1);
+		$this->tmp2 = $this->tmp1 . $this->replace ('/eval/', '\$this->tmp3=', $this->tmp2)."return;";
+		$this->exec($this->tmp2); //выполняем код из tmp2
+		$this->tmp3 = $this->replace ('/fread(.*)(\w,)/', '$this->readbuf($this->str3,', $this->tmp3);
+		$this->tmp3 = $this->replace ('/eval/', '\$this->tmp4=', $this->tmp3);
+		$this->tmp3 = $this->tmp1 . $this->replace ('/__FILE__/', $this->filename, $this->tmp3); //Особое внимание!  Не нужны кавычки в $replacement
+		$this->exec($this->tmp3); 	//выполняем код из tmp3
+		return $this->tmp4;
+	}
+	
+	public function line(){
+		$array = file($this->filename);
+		foreach ($array as $i=>$arg){
+			if (strstr($arg, '__LINE__')){
+				return $i;
+			}
+		}
+	}
+	
+	public function not_decode(){
+		//echo "<p style=\"color:#ff0000\">not_decode functuion is started!</p> ". $this->filename;			
+		return $this->input;
+	}
+	
+	public function choose_method(){
+		$tmp;
+		//echo "<br> Choosed method -->";
+		if (strstr($this->input, 'eval') &&  substr(strrchr($this->filename, '.'), 1) == "php"){
+			if (strstr($this->input, 'urldecode')){
+				$tmp = '<?php'.$this->amiro_decode().'?>';
+				$this->savedecoded($tmp);
+				return "<p style=\"color:#ff0000\">file decoded via amiro_decode method</p>";
+			}
+			else {
+				$tmp = '<?php'.$this->cms_decode().'?>';
+				$this->savedecoded($tmp);
+				return "<p style=\"color:#ff0000\">file decoded via cms_decode method</p>";
+			}
+		}
+		elseif (substr(strrchr($this->filename, '.'), 1) == "zip"){
+				return "<p style=\"color:#ff0000\">zip files doesn't copied</p>";			
+		}
+		else {
+				$tmp = $this->not_decode();
+				$this->savedecoded($tmp);
+				return "<p style=\"color:#ff0000\">file decoded via amiro_decode method</p>";
+		}
+	}
+}
+
+
+//****************   Main *******************************
+echo "<br> __FILE__ = ".__FILE__."<br>";
+if ($handle = opendir('.')) {
+    while (false !== ($file = readdir($handle))) { 
+        if ($file != "." && $file != ".." && $file != basename(__FILE__)) { 
+            echo "$file\n"; 
+			$m = new myclass($file);
+			$out = $m->choose_method();
+			echo $out;
+			//echo "<br>Saving decoded input file ".$file." to output file -- ".$m->decodedfilename."<br>";
+			// $m->savedecoded($out);
+			unset($m);
+        } 
+    }
+    closedir($handle); 
+echo "<br> It was decoded ".myclass::$triesnumber." files!";
+}
+?>
